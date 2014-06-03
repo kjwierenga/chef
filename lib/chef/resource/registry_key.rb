@@ -17,13 +17,14 @@
 #
 require 'chef/provider/registry_key'
 require 'chef/resource'
+require 'chef/digester'
 
 class Chef
   class Resource
     class RegistryKey < Chef::Resource
 
       identity_attr :key
-      state_attrs :values
+      state_attrs :safe_state_attrs
 
       def initialize(name, run_context=nil)
         super
@@ -43,6 +44,7 @@ class Chef
           :kind_of => String
         )
       end
+
       def values(arg=nil)
         if not arg.nil?
           if arg.is_a?(Hash)
@@ -66,6 +68,7 @@ class Chef
           @values
         end
       end
+
       def recursive(arg=nil)
         set_or_return(
           :recursive,
@@ -73,12 +76,37 @@ class Chef
           :kind_of => [TrueClass, FalseClass]
         )
       end
+
       def architecture(arg=nil)
         set_or_return(
           :architecture,
           arg,
           :kind_of => Symbol
         )
+      end
+
+      def safe_state_attrs
+        safe_state = []
+        @values.each do |value|
+          safe_value = value.dup
+          if needs_checksum?(safe_value)
+            io = StringIO.new(safe_value[:data])
+            safe_value[:data] = Chef::Digester.instance.generate_md5_checksum(io)
+          end
+          safe_state << safe_value
+        end
+
+        safe_state
+      end
+
+      private
+
+      # Returns true if the data type of the value is potentially unsafe to format
+      # as json. (Some of these may contain byte sequences which cannot be converted
+      # into valid utf-8.
+      def needs_checksum?(value)
+        unsafe_types = [:binary, :dword, :dwrod_big_endian, :qword]
+        unsafe_types.include?(value[:type])
       end
 
     end

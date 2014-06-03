@@ -169,3 +169,34 @@ describe Chef::Resource::RegistryKey, "architecture" do
     lambda { @resource.architecture(100) }.should raise_error(ArgumentError)
   end
 end
+
+describe Chef::Resource::RegistryKey, "safe_state_attrs" do
+  before(:each) do
+    @resource = Chef::Resource::RegistryKey.new('HKCU\Software\Raxicoricofallapatorius')
+  end
+
+  context "when data type is potentially unsafe to upload as json" do
+    before(:each) do
+      @resource.values([ { :name => 'poosh', :type => :binary, :data => 255.chr * 1 } ])
+    end
+
+    it "should save the data as an md5 checksum" do
+      chksum = "00594fd4f42ba43fc1ca0427a0576295"
+      @resource.safe_state_attrs.should eql([ { :name => 'poosh', :type => :binary, :data => chksum } ])
+    end
+
+    it "should not modify the actual value" do
+      @resource.values.should eql([ { :name => 'poosh', :type => :binary, :data => 255.chr * 1 } ])
+    end
+  end
+
+  context "when data type can be uploaded as json" do
+    before(:each) do
+      @resource.values([ { :name => 'poosh', :type => :string, :data => 'carmen' } ])
+    end
+
+    it "should save the data exactly as it is" do
+      @resource.safe_state_attrs.should eql(@resource.values)
+    end
+  end
+end
